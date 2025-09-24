@@ -9,7 +9,6 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function scrapeProspleSearch(searchUrl) {
   console.log("Fetching existing jobs from Supabase...");
 
-  // Fetch existing jobs to prevent duplicates
   const { data: existingJobs, error: fetchError } = await supabase
     .from("jobs")
     .select("url");
@@ -39,8 +38,7 @@ async function scrapeProspleSearch(searchUrl) {
   const listSelector = "li.sc-3bbad5b8-1";
   const nextButtonSelector = 'button[aria-label="Goto next page"]';
   const loaderSelector = ".sc-bYutwE";
-  const readMoreButtonSelector =
-    'button[data-event-track="view-all-opportunity-description"]';
+  const readMoreButtonSelector = 'button[data-event-track="view-all-opportunity-description"]';
   const modalSelector = 'div[role="dialog"][data-state="open"]';
   const modalDescriptionSelector = `${modalSelector} [data-testid="raw-html"]`;
 
@@ -54,9 +52,7 @@ async function scrapeProspleSearch(searchUrl) {
     console.log(`Found ${jobCount} job listings on page ${pageNum}.`);
 
     for (let index = 0; index < jobCount; index++) {
-      console.log(
-        `Processing job ${index + 1} of ${jobCount} on page ${pageNum}...`
-      );
+      console.log(`Processing job ${index + 1} of ${jobCount} on page ${pageNum}...`);
 
       const jobElements = await page.$$(listSelector);
       const job = jobElements[index];
@@ -90,10 +86,7 @@ async function scrapeProspleSearch(searchUrl) {
         console.log("Modal opened.");
 
         // Scrape the full description from inside the modal
-        fullDescription = await page.$eval(
-          modalDescriptionSelector,
-          (el) => el.innerText.trim()
-        );
+        fullDescription = await page.$eval(modalDescriptionSelector, (el) => el.innerText.trim());
 
         // Close the modal
         const closeButton = await page.$(`${modalSelector} button.sc-ljIkKL`);
@@ -113,8 +106,7 @@ async function scrapeProspleSearch(searchUrl) {
           const li = allListItems[index];
           if (!li) return null;
 
-          const safeText = (el, selector) =>
-            el?.querySelector(selector)?.innerText.trim() || "";
+          const safeText = (el, selector) => el?.querySelector(selector)?.innerText.trim() || "";
 
           // ----- LEFT PANE -----
           const jobTitleEl = li.querySelector("h2.sc-dOfePm a");
@@ -124,9 +116,7 @@ async function scrapeProspleSearch(searchUrl) {
           const startDateEl = li.querySelector(".sc-692f12d5-24 .field-item");
           const closingEl = li.querySelector('[data-testid="badge"] span');
 
-          const roles = Array.from(
-            li.querySelectorAll(".sc-692f12d5-30 span")
-          )
+          const roles = Array.from(li.querySelectorAll(".sc-692f12d5-30 span"))
             .map((span) => span.innerText.trim())
             .filter(Boolean);
 
@@ -142,34 +132,27 @@ async function scrapeProspleSearch(searchUrl) {
           };
 
           // ----- RIGHT PANE -----
-          const benefitLi = Array.from(
-            document.querySelectorAll(".sc-58338662-2 li")
-          ).find((li) => li.innerText.includes("Additional benefits"));
-          const benefits =
-            benefitLi?.querySelector("span.sc-58338662-5")?.innerText || "";
+          const benefitLi = Array.from(document.querySelectorAll(".sc-58338662-2 li")).find((li) =>
+            li.innerText.includes("Additional benefits")
+          );
+          const benefits = benefitLi?.querySelector("span.sc-58338662-5")?.innerText || "";
 
-          const deadlineLi = Array.from(
-            document.querySelectorAll(".sc-58338662-2 li")
-          ).find((li) => li.innerText.includes("Apply by"));
+          const deadlineLi = Array.from(document.querySelectorAll(".sc-58338662-2 li")).find((li) =>
+            li.innerText.includes("Apply by")
+          );
           const deadline =
-            deadlineLi
-              ?.querySelector("span.sc-58338662-5")
-              ?.innerText.replace("Apply by ", "") || "";
+            deadlineLi?.querySelector("span.sc-58338662-5")?.innerText.replace("Apply by ", "") || "";
 
-          const startDetailLi = Array.from(
-            document.querySelectorAll(".sc-58338662-2 li")
-          ).find((li) => li.innerText.includes("Start date"));
+          const startDetailLi = Array.from(document.querySelectorAll(".sc-58338662-2 li")).find((li) =>
+            li.innerText.includes("Start date")
+          );
           const startDateDetail =
-            startDetailLi
-              ?.querySelector("span.sc-58338662-5")
-              ?.innerText.replace("Start date ", "") || "";
+            startDetailLi?.querySelector("span.sc-58338662-5")?.innerText.replace("Start date ", "") || "";
 
-          const industry =
-            document.querySelector(".sc-7b9ae07d-7")?.innerText.trim() || "";
+          const industry = document.querySelector(".sc-7b9ae07d-7")?.innerText.trim() || "";
 
           const firstLi = document.querySelector(".sc-58338662-2 li");
-          const jobType =
-            firstLi?.querySelector("span.sc-58338662-5")?.innerText || "";
+          const jobType = firstLi?.querySelector("span.sc-58338662-5")?.innerText || "";
 
           return {
             ...summary,
@@ -198,88 +181,33 @@ async function scrapeProspleSearch(searchUrl) {
         continue;
       }
 
-      try {
-        // ✅ Check if company exists
-        const { data: existingCompany, error: companyFetchError } =
-          await supabase
-            .from("companies")
-            .select("id, name")
-            .eq("name", jobData.company)
-            .maybeSingle();
+      const jobRecord = {
+        job_title: jobData.title,
+        company_name: jobData.company,
+        deadline: jobData.deadline ? new Date(jobData.deadline) : null,
+        start_date: jobData.startDateDetail || jobData.startDate,
+        location: jobData.location,
+        job_type: jobData.jobType,
+        category: jobData.industry,
+        roles: jobData.roles,
+        description: jobData.description,
+        url: fullUrl,
+        benefits: jobData.benefits,
+      };
 
-        let companyId;
+      const { error: insertError } = await supabase.from("jobs").insert([jobRecord]);
 
-        if (companyFetchError) {
-          console.error(
-            "Error fetching company:",
-            companyFetchError.message
-          );
-          continue; // skip this job and continue with next
-        }
-
-        if (existingCompany) {
-          companyId = existingCompany.id;
-          console.log(
-            `Company found: ${existingCompany.name} (ID: ${companyId})`
-          );
-        } else {
-          console.log(
-            `Company not found. Inserting: ${jobData.company}`
-          );
-
-          // Insert new company
-          const { data: insertedCompany, error: insertError } = await supabase
-            .from("companies")
-            .insert([{ name: jobData.company }])
-            .select("id")
-            .single();
-
-          if (insertError) {
-            console.error(
-              "Error inserting new company:",
-              insertError.message
-            );
-            continue; // skip this job and continue
-          }
-
-          companyId = insertedCompany.id;
-          console.log(
-            `Inserted new company: ${jobData.company} (ID: ${companyId})`
-          );
-        }
-
-        // ✅ Insert job with company_id
-        const jobRecord = {
-          job_title: jobData.title,
-          company_id: companyId,
-          deadline: jobData.deadline ? new Date(jobData.deadline) : null,
-          start_date: jobData.startDateDetail || jobData.startDate,
-          location: jobData.location,
-          job_type: jobData.jobType,
-          category: jobData.industry,
-          description: jobData.description,
-          url: fullUrl,
-          benefits: jobData.benefits,
-        };
-
-        const { error: insertError } = await supabase
-          .from("jobs")
-          .insert([jobRecord]);
-
-        if (insertError) {
-          console.error("Insert error:", insertError.message);
-        } else {
-          console.log(`Inserted new job: ${jobRecord.job_title}`);
-          existingUrls.add(fullUrl);
-        }
-      } catch (err) {
-        console.error("Unexpected error inserting job:", err.message);
+      if (insertError) {
+        console.error("Insert error:", insertError.message);
+      } else {
+        console.log(`Inserted new job: ${jobRecord.job_title}`);
+        existingUrls.add(fullUrl);
       }
 
       await delay(1200);
     }
 
-    // ----- PAGINATION ----- (unchanged and fully working)
+    // ----- PAGINATION -----
     const nextButton = await page.$(nextButtonSelector);
     if (!nextButton) {
       console.log("No more pages found. Finished scraping.");
@@ -290,20 +218,14 @@ async function scrapeProspleSearch(searchUrl) {
     await nextButton.click();
 
     try {
-      await page.waitForSelector(loaderSelector, {
-        visible: true,
-        timeout: 5000,
-      });
+      await page.waitForSelector(loaderSelector, { visible: true, timeout: 5000 });
       console.log("Loader appeared.");
     } catch {
       console.warn("Loader did not appear, continuing...");
     }
 
     try {
-      await page.waitForSelector(loaderSelector, {
-        hidden: true,
-        timeout: 15000,
-      });
+      await page.waitForSelector(loaderSelector, { hidden: true, timeout: 15000 });
       console.log("Loader finished, next page loaded.");
     } catch {
       console.warn("Loader did not disappear in time, continuing anyway...");
