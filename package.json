@@ -1,7 +1,6 @@
 {
   "name": "placements",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -11,9 +10,21 @@
   "license": "ISC",
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
+    "axios": "^1.12.2",
     "cheerio": "^1.1.2",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.2",
-    "puppeteer": "^24.22.0"
-  }
+    "puppeteer": "^24.22.2",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jackstewart254/placement-scraper.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jackstewart254/placement-scraper/issues"
+  },
+  "homepage": "https://github.com/jackstewart254/placement-scraper#readme",
+  "description": ""
 }

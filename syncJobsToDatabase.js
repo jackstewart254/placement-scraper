@@ -1,36 +1,38 @@
-const supabase = require('./supabaseClient');
+const supabase = require("./utils/supabase");
 
 /**
  * Sync scraped jobs with the database
  * @param {Array} scrapedJobs - array of jobs from scraper
  */
 const syncJobsToDatabase = async (scrapedJobs) => {
-  console.log('Starting sync...');
+  console.log("Starting sync...");
   console.log("Scraped jobs at start:", scrapedJobs.length);
 
   const { data: companies, error: companiesError } = await supabase
-    .from('companies')
-    .select('id, name');
+    .from("companies")
+    .select("id, name");
 
   if (companiesError) {
-    console.error('Error fetching companies:', companiesError);
+    console.error("Error fetching companies:", companiesError);
     return;
   }
 
   const { data: jobs, error: jobsError } = await supabase
-    .from('jobs')
-    .select('id, company_id, job_title');
+    .from("jobs")
+    .select("id, company_id, job_title");
 
   if (jobsError) {
-    console.error('Error fetching jobs:', jobsError);
+    console.error("Error fetching jobs:", jobsError);
     return;
   }
 
   console.log(`Fetched ${companies.length} companies and ${jobs.length} jobs.`);
 
-  const companyMap = new Map(companies.map(c => [c.name.toLowerCase(), c.id]));
+  const companyMap = new Map(
+    companies.map((c) => [c.name.toLowerCase(), c.id])
+  );
   const jobMap = new Map(
-    jobs.map(j => [`${j.company_id}-${j.job_title.toLowerCase()}`, j.id])
+    jobs.map((j) => [`${j.company_id}-${j.job_title.toLowerCase()}`, j.id])
   );
 
   const newCompanies = [];
@@ -45,10 +47,10 @@ const syncJobsToDatabase = async (scrapedJobs) => {
       cvRequired,
       coverLetterRequired,
       writtenAnswersRequired,
-      category
+      category,
     } = job;
 
-    if (!company || !jobTitle) continue; 
+    if (!company || !jobTitle) continue;
 
     const companyKey = company.toLowerCase();
 
@@ -62,17 +64,15 @@ const syncJobsToDatabase = async (scrapedJobs) => {
   }
 
   if (newCompanies.length > 0) {
-    const { data: insertedCompanies, error: insertCompanyError } = await supabase
-      .from('companies')
-      .insert(newCompanies)
-      .select();
+    const { data: insertedCompanies, error: insertCompanyError } =
+      await supabase.from("companies").insert(newCompanies).select();
 
     if (insertCompanyError) {
-      console.error('Error inserting new companies:', insertCompanyError);
+      console.error("Error inserting new companies:", insertCompanyError);
       return;
     }
 
-    insertedCompanies.forEach(c => {
+    insertedCompanies.forEach((c) => {
       companyMap.set(c.name.toLowerCase(), c.id);
     });
 
@@ -88,7 +88,7 @@ const syncJobsToDatabase = async (scrapedJobs) => {
       cvRequired,
       coverLetterRequired,
       writtenAnswersRequired,
-      category
+      category,
     } = job;
 
     if (!company || !jobTitle) continue;
@@ -104,10 +104,10 @@ const syncJobsToDatabase = async (scrapedJobs) => {
         job_title: jobTitle,
         opened,
         url,
-        cv: cvRequired === 'Yes',
-        cover_letter: coverLetterRequired === 'Yes',
-        written_answers: writtenAnswersRequired === 'Yes',
-        category
+        cv: cvRequired === "Yes",
+        cover_letter: coverLetterRequired === "Yes",
+        written_answers: writtenAnswersRequired === "Yes",
+        category,
       });
 
       console.log(`New job found: ${company} - ${jobTitle}`);
@@ -116,21 +116,21 @@ const syncJobsToDatabase = async (scrapedJobs) => {
 
   if (newJobs.length > 0) {
     const { data: insertedJobs, error: insertJobError } = await supabase
-      .from('jobs')
+      .from("jobs")
       .insert(newJobs)
       .select();
 
     if (insertJobError) {
-      console.error('Error inserting new jobs:', insertJobError);
+      console.error("Error inserting new jobs:", insertJobError);
       return;
     }
 
     console.log(`Inserted ${insertedJobs.length} new jobs.`);
   } else {
-    console.log('No new jobs to insert.');
+    console.log("No new jobs to insert.");
   }
 
-  console.log('Sync complete.');
+  console.log("Sync complete.");
 };
 
 module.exports = syncJobsToDatabase;
