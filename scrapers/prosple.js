@@ -6,6 +6,22 @@ const supabase = require("../utils/supabase");
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Decode the Base64 "url" parameter inside the Prosple apply link
+ */
+function decodeProspleUrl(href) {
+  try {
+    const urlParams = new URLSearchParams(href.split("?")[1]);
+    const encodedUrl = urlParams.get("url");
+    if (!encodedUrl) return null;
+
+    return Buffer.from(encodedUrl, "base64").toString("utf-8");
+  } catch (err) {
+    console.error("❌ Failed to decode URL:", err.message);
+    return null;
+  }
+}
+
 async function scrapeProspleSearch(searchUrl) {
   console.log("Fetching existing jobs from Supabase...");
 
@@ -22,6 +38,7 @@ async function scrapeProspleSearch(searchUrl) {
   const existingUrls = new Set(existingJobs.map((job) => job.url));
   console.log(`Fetched ${existingUrls.size} existing jobs from Supabase.`);
 
+  // Launch Puppeteer with defined viewport
   const browser = await puppeteer.launch({
     headless: false,
     args: [
@@ -29,7 +46,10 @@ async function scrapeProspleSearch(searchUrl) {
       "--disable-setuid-sandbox",
       "--disable-blink-features=AutomationControlled",
     ],
-    defaultViewport: null,
+    defaultViewport: {
+      width: 2200,
+      height: 1200,
+    },
   });
 
   const page = await browser.newPage();
@@ -43,6 +63,7 @@ async function scrapeProspleSearch(searchUrl) {
     'button[data-event-track="view-all-opportunity-description"]';
   const modalSelector = 'div[role="dialog"][data-state="open"]';
   const modalDescriptionSelector = `${modalSelector} [data-testid="raw-html"]`;
+  const applyButtonSelector = 'a[data-event-track="cta-apply"]'; // ✅ real apply button
 
   let pageNum = 1;
 
@@ -74,10 +95,9 @@ async function scrapeProspleSearch(searchUrl) {
         continue;
       }
 
-      // Wait for detail pane to load
-      await delay(800);
+      await delay(800); // Wait for detail pane to load
 
-      // ✅ Click the "Read More" button if present
+      // ✅ Get "Read More" description
       const readMoreButton = await page.$(readMoreButtonSelector);
       let fullDescription = "";
 
@@ -85,28 +105,41 @@ async function scrapeProspleSearch(searchUrl) {
         console.log("Opening full description modal...");
         await readMoreButton.click();
 
-        // Wait for modal to appear
         await page.waitForSelector(modalSelector, { visible: true });
         console.log("Modal opened.");
 
-        // Scrape the full description from inside the modal
         fullDescription = await page.$eval(
           modalDescriptionSelector,
           (el) => el.innerText.trim()
         );
 
-        // Close the modal
         const closeButton = await page.$(`${modalSelector} button.sc-ljIkKL`);
         if (closeButton) {
           await closeButton.click();
           console.log("Modal closed.");
-          await delay(500); // Give it time to disappear
+          await delay(500);
         }
-      } else {
-        console.log("No 'Read More' button found, using default description.");
       }
 
-      // Extract all other job data (left and right panes)
+      // ✅ Extract apply button real URL
+      let realUrl = null;
+      try {
+        await page.waitForSelector(applyButtonSelector, { timeout: 5000 });
+        const applyHref = await page.$eval(applyButtonSelector, (el) =>
+          el.getAttribute("href")
+        );
+
+        if (applyHref) {
+          realUrl = decodeProspleUrl(applyHref);
+          console.log(`Decoded employer URL: ${realUrl}`);
+        } else {
+          console.warn("⚠️ No apply button found, defaulting to Prosple URL.");
+        }
+      } catch {
+        console.warn("⚠️ No apply button found, defaulting to Prosple URL.");
+      }
+
+      // ✅ Extract job data
       const jobData = await page.evaluate(
         (listSelector, index, fullDescription) => {
           const allListItems = document.querySelectorAll(listSelector);
@@ -116,7 +149,6 @@ async function scrapeProspleSearch(searchUrl) {
           const safeText = (el, selector) =>
             el?.querySelector(selector)?.innerText.trim() || "";
 
-          // ----- LEFT PANE -----
           const jobTitleEl = li.querySelector("h2.sc-dOfePm a");
           const companyEl = li.querySelector("p.sc-692f12d5-5");
           const locationEl = li.querySelector("p.sc-692f12d5-15");
@@ -124,61 +156,19 @@ async function scrapeProspleSearch(searchUrl) {
           const startDateEl = li.querySelector(".sc-692f12d5-24 .field-item");
           const closingEl = li.querySelector('[data-testid="badge"] span');
 
-          const roles = Array.from(
-            li.querySelectorAll(".sc-692f12d5-30 span")
-          )
+          const roles = Array.from(li.querySelectorAll(".sc-692f12d5-30 span"))
             .map((span) => span.innerText.trim())
             .filter(Boolean);
 
-          const summary = {
+          return {
             title: jobTitleEl?.innerText.trim() || "",
-            relativeUrl: jobTitleEl?.getAttribute("href") || "",
             company: companyEl?.innerText.trim() || "",
             location: locationEl?.innerText.trim() || "",
             salary: salaryEl?.innerText.trim() || "",
             startDate: startDateEl?.innerText.trim() || "",
             closingInfo: closingEl?.innerText.trim() || "",
             roles,
-          };
-
-          // ----- RIGHT PANE -----
-          const benefitLi = Array.from(
-            document.querySelectorAll(".sc-58338662-2 li")
-          ).find((li) => li.innerText.includes("Additional benefits"));
-          const benefits =
-            benefitLi?.querySelector("span.sc-58338662-5")?.innerText || "";
-
-          const deadlineLi = Array.from(
-            document.querySelectorAll(".sc-58338662-2 li")
-          ).find((li) => li.innerText.includes("Apply by"));
-          const deadline =
-            deadlineLi
-              ?.querySelector("span.sc-58338662-5")
-              ?.innerText.replace("Apply by ", "") || "";
-
-          const startDetailLi = Array.from(
-            document.querySelectorAll(".sc-58338662-2 li")
-          ).find((li) => li.innerText.includes("Start date"));
-          const startDateDetail =
-            startDetailLi
-              ?.querySelector("span.sc-58338662-5")
-              ?.innerText.replace("Start date ", "") || "";
-
-          const industry =
-            document.querySelector(".sc-7b9ae07d-7")?.innerText.trim() || "";
-
-          const firstLi = document.querySelector(".sc-58338662-2 li");
-          const jobType =
-            firstLi?.querySelector("span.sc-58338662-5")?.innerText || "";
-
-          return {
-            ...summary,
-            industry,
             description: fullDescription || "",
-            benefits,
-            deadline,
-            startDateDetail,
-            jobType,
           };
         },
         listSelector,
@@ -191,15 +181,15 @@ async function scrapeProspleSearch(searchUrl) {
         continue;
       }
 
-      const fullUrl = "https://uk.prosple.com" + jobData.relativeUrl;
-
-      if (existingUrls.has(fullUrl)) {
+      // ✅ Decide which URL to save (real employer > Prosple)
+      const finalUrl = realUrl || searchUrl;
+      if (existingUrls.has(finalUrl)) {
         console.log(`Skipping existing job: ${jobData.title}`);
         continue;
       }
 
       try {
-        // ✅ Check if company exists
+        // Check if company exists
         const { data: existingCompany, error: companyFetchError } =
           await supabase
             .from("companies")
@@ -210,24 +200,16 @@ async function scrapeProspleSearch(searchUrl) {
         let companyId;
 
         if (companyFetchError) {
-          console.error(
-            "Error fetching company:",
-            companyFetchError.message
-          );
-          continue; // skip this job and continue with next
+          console.error("Error fetching company:", companyFetchError.message);
+          continue;
         }
 
         if (existingCompany) {
           companyId = existingCompany.id;
-          console.log(
-            `Company found: ${existingCompany.name} (ID: ${companyId})`
-          );
+          console.log(`Company found: ${existingCompany.name} (ID: ${companyId})`);
         } else {
-          console.log(
-            `Company not found. Inserting: ${jobData.company}`
-          );
+          console.log(`Company not found. Inserting: ${jobData.company}`);
 
-          // Insert new company
           const { data: insertedCompany, error: insertError } = await supabase
             .from("companies")
             .insert([{ name: jobData.company }])
@@ -235,43 +217,36 @@ async function scrapeProspleSearch(searchUrl) {
             .single();
 
           if (insertError) {
-            console.error(
-              "Error inserting new company:",
-              insertError.message
-            );
-            continue; // skip this job and continue
+            console.error("Error inserting new company:", insertError.message);
+            continue;
           }
 
           companyId = insertedCompany.id;
-          console.log(
-            `Inserted new company: ${jobData.company} (ID: ${companyId})`
-          );
+          console.log(`Inserted new company: ${jobData.company} (ID: ${companyId})`);
         }
 
-        // ✅ Insert job with company_id
-        const jobRecord = {
-          job_title: jobData.title,
-          company_id: companyId,
-          deadline: jobData.deadline ? new Date(jobData.deadline) : null,
-          start_date: jobData.startDateDetail || jobData.startDate,
-          location: jobData.location,
-          job_type: jobData.jobType,
-          category: jobData.industry,
-          description: jobData.description,
-          url: fullUrl,
-          benefits: jobData.benefits,
-        };
+        // Insert job with real employer URL
+const jobRecord = {
+  job_title: jobData.title,
+  company_id: companyId,
+  start_date: jobData.startDate,
+  location: jobData.location,
+  description: jobData.description,
+  url: finalUrl, // decoded real employer URL
+  benefits: jobData.benefits || "",
+  created_at: new Date().toISOString(), // optional, may be auto-managed
+  updated_at: new Date().toISOString(), // optional, may be auto-managed
+};
 
-        const { error: insertError } = await supabase
-          .from("jobs")
-          .insert([jobRecord]);
+const { error: insertError } = await supabase.from("jobs").insert([jobRecord]);
 
-        if (insertError) {
-          console.error("Insert error:", insertError.message);
-        } else {
-          console.log(`Inserted new job: ${jobRecord.job_title}`);
-          existingUrls.add(fullUrl);
-        }
+if (insertError) {
+  console.error("Insert error:", insertError.message);
+} else {
+  console.log(`Inserted new job: ${jobRecord.job_title}`);
+  existingUrls.add(finalUrl);
+}
+
       } catch (err) {
         console.error("Unexpected error inserting job:", err.message);
       }
@@ -279,7 +254,7 @@ async function scrapeProspleSearch(searchUrl) {
       await delay(1200);
     }
 
-    // ----- PAGINATION ----- (unchanged and fully working)
+    // Pagination
     const nextButton = await page.$(nextButtonSelector);
     if (!nextButton) {
       console.log("No more pages found. Finished scraping.");

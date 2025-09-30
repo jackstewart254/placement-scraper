@@ -9,81 +9,125 @@ const openai = new OpenAI({
 
 async function classifyJobs() {
   try {
-    // 1. Fetch jobs without job_type or category
-    const { data: jobs, error } = await supabase
+    console.log("Fetching categories from database...");
+
+    // 1. Fetch valid categories from the database
+    const { data: categories, error: categoryError } = await supabase
+      .from("categories")
+      .select("id, name");
+
+    if (categoryError) throw categoryError;
+
+    if (!categories.length) {
+      console.error("❌ No categories found in the database.");
+      return;
+    }
+
+    console.log(`✅ Fetched ${categories.length} categories.`);
+    const categoryList = categories.map((cat) => cat.name);
+
+    console.log("Fetching jobs that need classification...");
+
+    // 2. Fetch jobs that have BOTH job_type and category missing
+    const { data: jobs, error: jobError } = await supabase
       .from("jobs")
       .select("id, job_title, description")
-      .range(20, 1000);
+      .or("category.is.null,category.eq.''") // category null or empty
+      .or("job_type.is.null,job_type.eq.''"); // job_type null or empty
 
+    if (jobError) throw jobError;
 
-    if (error) throw error;
     if (!jobs.length) {
       console.log("No jobs found needing classification.");
       return;
     }
 
-    console.log(`Found ${jobs.length} jobs to classify.`);
+    console.log(`✅ Found ${jobs.length} jobs to classify.`);
 
-    for (const job of jobs) {
-      console.log(`Classifying job: ${job.job_title}`);
+    // 3. Loop through jobs and classify them
+    for (let i = 0; i < jobs.length; i++) {
+      const job = jobs[i];
 
-      // 2. Send to OpenAI for classification
+      // Progress display
+      console.log(`\n[${i + 1}/${jobs.length}] Classifying job: ${job.job_title}`);
+
+      // Build AI prompt
       const prompt = `
-      You are a job classifier.
-      Based on the provided job title and description, determine:
+      You are a job classification assistant.
 
-      1. job_type → must be exactly one of: "internship", "placement", or "clerkship".
-      2. category → general field of the job, e.g., "Technology", "Finance", "Healthcare", "Engineering", etc.
+      Based on the job title and description provided:
+      - Determine the **job_type** → exactly one of: "internship", "placement", or "clerkship".
+      - Determine the **category** → choose the SINGLE most relevant value from this list:
+        ${categoryList.join(", ")}
 
-      Return only JSON in this exact format:
+      Return ONLY JSON in this exact format:
       {
         "job_type": "placement",
         "category": "Technology"
       }
 
       Job Title: ${job.job_title}
-      Description: ${job.description}
+      Job Description: ${job.description}
       `;
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4.1-mini",
-        messages: [{ role: "system", content: prompt }],
-        temperature: 0, // deterministic
-      });
-
-      const result = completion.choices[0].message.content;
-
-      let parsed;
       try {
-        parsed = JSON.parse(result);
+        // 4. Send to OpenAI
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4.1-mini",
+          messages: [{ role: "system", content: prompt }],
+          temperature: 0,
+        });
+
+        const result = completion.choices[0].message.content.trim();
+
+        let parsed;
+        try {
+          parsed = JSON.parse(result);
+        } catch (err) {
+          console.error(`❌ Failed to parse JSON for job "${job.job_title}":`, result);
+          continue;
+        }
+
+        const { job_type, category } = parsed;
+
+        // 5. Validate job_type
+        if (!["internship", "placement", "clerkship"].includes(job_type)) {
+          console.error(`❌ Invalid job_type returned: ${job_type} for job ${job.job_title}`);
+          continue;
+        }
+
+        // 6. Validate category
+        if (!categoryList.includes(category)) {
+          console.error(`❌ Invalid category returned: ${category} for job ${job.job_title}`);
+          continue;
+        }
+
+        // 7. Update job in Supabase
+        const { error: updateError } = await supabase
+          .from("jobs")
+          .update({
+            job_type,
+            category,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", job.id);
+
+        if (updateError) {
+          console.error(`❌ Error updating job ${job.id}:`, updateError.message);
+        } else {
+          console.log(
+            `✅ Updated job ${job.id}: job_type = ${job_type}, category = ${category}`
+          );
+        }
+
+        // Small delay to avoid rate limits
+        await new Promise((res) => setTimeout(res, 500));
       } catch (err) {
-        console.error("Failed to parse JSON:", result);
-        continue;
+        console.error(`❌ Error classifying job "${job.job_title}":`, err.message);
       }
-
-      // 3. Update Supabase
-      const { error: updateError } = await supabase
-        .from("jobs")
-        .update({
-          job_type: parsed.job_type,
-          category: parsed.category,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", job.id);
-
-      if (updateError) {
-        console.error(`Error updating job ${job.id}:`, updateError.message);
-      } else {
-        console.log(
-          `Updated job ${job.id} → ${parsed.job_type}, ${parsed.category}`
-        );
-      }
-
-      // Small delay to avoid rate limits
-      await new Promise((res) => setTimeout(res, 500));
     }
 
-    console.log("Classification complete.");
+    console.log("\n🎉 Classification complete!");
   } catch (err) {
     console.error("Unexpected error:", err.message);
   }

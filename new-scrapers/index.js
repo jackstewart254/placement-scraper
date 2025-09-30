@@ -1,8 +1,8 @@
 import "dotenv/config";
 
-import { scrapeAllHigherInJobs } from "./new-scrapers/htmlFetch.js";
-import { scrapeJobDetails } from "./new-scrapers/descriptionFetch.js";
-import supabase from "./utils/supabase.js";
+import { scrapeAllHigherInJobs } from "./htmlFetch.js";
+import { scrapeJobDetails } from "./descriptionFetch.js";
+import supabase from "../utils/supabase.js";
 
 async function main() {
   try {
