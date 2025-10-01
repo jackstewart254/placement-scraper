@@ -36,7 +36,7 @@ export default async function normaliseLocations() {
   const { data: records, error } = await supabase
     .from("processing")
     .select("id, location, description")
-    .eq("ready", false)
+    .eq("ready", false);
 
   if (error) {
     console.error("Error fetching processing records:", error.message);
@@ -56,7 +56,9 @@ export default async function normaliseLocations() {
 
   for (let i = 0; i < records.length; i++) {
     const record = records[i];
-    console.log(`\n⚙️ Processing record ID ${record.id} (${i + 1}/${records.length})...`);
+    console.log(
+      `\n⚙️ Processing record ID ${record.id} (${i + 1}/${records.length})...`
+    );
 
     let newLocation = record.location;
     let formattedDescription = record.description;
@@ -89,7 +91,10 @@ export default async function normaliseLocations() {
         const parsed = JSON.parse(rawLocOutput);
         newLocation = parsed[record.location] || record.location;
       } catch (err) {
-        console.error(`❌ Location normalization failed for ID ${record.id}:`, err.message);
+        console.error(
+          `❌ Location normalization failed for ID ${record.id}:`,
+          err.message
+        );
       }
     }
     const locationEnd = Date.now();
@@ -111,29 +116,42 @@ export default async function normaliseLocations() {
         location: newLocation,
         description: formattedDescription,
         ready: true,
-        updated_at: new Date()
+        updated_at: new Date(),
       })
       .eq("id", record.id);
 
     if (updateError) {
-      console.error(`❌ Failed to update record ${record.id}:`, updateError.message);
+      console.error(
+        `❌ Failed to update record ${record.id}:`,
+        updateError.message
+      );
     } else {
       console.log(`✅ Updated record ${record.id}`);
     }
 
     // 🔹 Show time stats
-    const locMean = locationTimes.reduce((a, b) => a + b, 0) / locationTimes.length;
-    const descMean = descriptionTimes.reduce((a, b) => a + b, 0) / descriptionTimes.length;
+    const locMean =
+      locationTimes.reduce((a, b) => a + b, 0) / locationTimes.length;
+    const descMean =
+      descriptionTimes.reduce((a, b) => a + b, 0) / descriptionTimes.length;
 
     const remaining = records.length - (i + 1);
     const etaMs = remaining * (locMean + descMean);
 
     console.log(`Location took: ${(locationDuration / 1000).toFixed(2)}s`);
-    console.log(`Description took: ${(descriptionDuration / 1000).toFixed(2)}s`);
     console.log(
-      `⏱️ Avg Location: ${(locMean / 1000).toFixed(2)}s | Avg Description: ${(descMean / 1000).toFixed(2)}s`
+      `Description took: ${(descriptionDuration / 1000).toFixed(2)}s`
     );
-    console.log(`🕒 Estimated time remaining: ${(etaMs / 1000).toFixed(2)}s (${(etaMs / 60000).toFixed(2)} mins)`);
+    console.log(
+      `⏱️ Avg Location: ${(locMean / 1000).toFixed(2)}s | Avg Description: ${(
+        descMean / 1000
+      ).toFixed(2)}s`
+    );
+    console.log(
+      `🕒 Estimated time remaining: ${(etaMs / 1000).toFixed(2)}s (${(
+        etaMs / 60000
+      ).toFixed(2)} mins)`
+    );
   }
 
   console.log("\n🎉 Finished processing all records.");
