@@ -22,7 +22,7 @@ async function main() {
     console.log(`✅ Found ${data.length} jobs`);
 
     // Scrape details for first 5 jobs
-    const descriptions = await scrapeJobDetails(data.slice(0, 5));
+    const descriptions = await scrapeJobDetails(data.slice(700, 705));
     console.log("Descriptions:", descriptions[0]);
   } catch (err) {
     console.error("❌ Main script failed:", err.message);

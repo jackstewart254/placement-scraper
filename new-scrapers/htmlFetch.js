@@ -50,7 +50,7 @@ async function scrapeHigherIn(url) {
     salary: job.salary,
     url: job.url,
     logo: job.smallLogo,
-    origin: "Higherin"
+    origin: "Higherin",
   }));
 
   const pagination = findPagination(jobData) || {};
@@ -58,25 +58,31 @@ async function scrapeHigherIn(url) {
   return { jobs, pagination };
 }
 
-export async function scrapeAllHigherInJobs(present) {
+export async function scrapeAllHigherInJobs(present = []) {
+  // Extract URLs from array of objects
+  const presentSet = new Set(present.map((p) => p.url));
+
   const baseUrl = "https://higherin.com/search-jobs/placements";
   const firstPage = await scrapeHigherIn(baseUrl);
 
-  const allJobs = [...firstPage.jobs];
+  const allJobs = firstPage.jobs.filter((job) => !presentSet.has(job.url));
   const totalPages = firstPage.pagination.lastPage || 1;
 
   console.log(`🔎 Found ${firstPage.jobs.length} jobs on page 1`);
   console.log(`📄 Total pages: ${totalPages}`);
+  console.log(`🆕 New jobs from page 1: ${allJobs.length}`);
 
   for (let page = 2; page <= totalPages; page++) {
     const pageUrl = `${baseUrl}?page=${page}`;
     console.log(`➡️ Scraping page ${page} of ${totalPages}`);
     const { jobs } = await scrapeHigherIn(pageUrl);
-    allJobs.push(...jobs);
+
+    const newJobs = jobs.filter((job) => !presentSet.has(job.url));
+    allJobs.push(...newJobs);
+
+    console.log(`🆕 New jobs from page ${page}: ${newJobs.length}`);
   }
 
-  console.log(`✅ Scraped total jobs: ${allJobs.length}`);
+  console.log(`✅ Total new jobs scraped: ${allJobs.length}`);
   return allJobs;
 }
-
-
