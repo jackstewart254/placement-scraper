@@ -32,5 +32,8 @@
     "url": "https://github.com/jackstewart254/placement-scraper/issues"
   },
   "homepage": "https://github.com/jackstewart254/placement-scraper#readme",
-  "description": ""
+  "description": "",
+  "devDependencies": {
+    "prettier": "^3.6.2"
+  }
 }

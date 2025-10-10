@@ -1,19 +1,18 @@
 import supabase from "../utils/supabase.js";
-import { getDescriptions } from "./getDescriptions.js";
-import { linkProcessingToJobs } from "../temp.js";
+import fetchProcessing from "../hooks/fetchProcessing.js";
+import fetchDescriptions from "../hooks/fetchDescriptions.js";
+import { getDescriptions } from "./getDescriptions.js"; 
 
-const callDescriptions = async () => {
-  const { data: jobs, error: jobsError } = await supabase
-    .from("processing")
-    .select("id, url")
-    .eq("ready", true);
+export default async function callDescriptions() {
+  const jobs = await fetchProcessing(); // [{ id, ... }]
+  const descriptions = await fetchDescriptions(); // [{ processing_id, description }]
 
-  if (jobsError) {
-    console.error("Error fetching jobs:", jobsError);
-    return [];
-  }
+  // Create a Set of all processing_ids that have descriptions
+  const describedSet = new Set(descriptions.map(d => d.processing_id));
 
-  getDescriptions(jobs)
-};
+  // Filter jobs that are missing a matching description
+  const missingDescriptions = jobs.filter(job => !describedSet.has(job.id));
 
-export default callDescriptions
+
+  getDescriptions(missingDescriptions)
+}

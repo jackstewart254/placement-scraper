@@ -121,18 +121,34 @@ export async function scrapeJobDetail(job) {
     deadline: parseDeadline(job.deadline),
     salary: job.salary || null,
     logo: job.logo || null,
-    origin: "higherin",
     ready: false,
     roles: rolesStr,
   };
 
-  // ✅ Insert into processing
-  const { error } = await supabase.from("processing").insert([record]);
+  const { data: insertedRows, error } = await supabase
+  .from("processing")
+  .insert([record])
+  .select("id") // 👈 return the generated id
+  .single();
+
   if (error) {
     console.error("❌ Insert failed:", error.message, job.url);
-  } else {
-    console.log(`✅ Inserted job into processing: ${job.title}`);
+    return;
   }
+
+  const processingId = insertedRows.id;
+
+  // ✅ Insert into descriptions
+  const { error: descError } = await supabase
+    .from("descriptions")
+    .insert([{ processing_id: processingId, description: cleanDescription }]);
+
+  if (descError) {
+    console.error("❌ Description insert failed:", descError.message);
+  } else {
+    console.log(`✅ Inserted job into processing & descriptions: ${job.title}`);
+  }
+
 }
 
 export async function scrapeJobDetails(jobs) {

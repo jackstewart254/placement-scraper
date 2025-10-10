@@ -50,7 +50,6 @@ async function scrapeHigherIn(url) {
     salary: job.salary,
     url: job.url,
     logo: job.smallLogo,
-    origin: "Higherin",
   }));
 
   const pagination = findPagination(jobData) || {};

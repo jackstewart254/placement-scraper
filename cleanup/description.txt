@@ -1,0 +1,1 @@
+This folder will house all the files that I use seperately to clean and normalise data in my database

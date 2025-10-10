@@ -1,22 +1,13 @@
 // scripts/migrateProcessingToJobs.js
+import fetchProcessing from "../hooks/fetchProcessing.js";
 import supabase from "../utils/supabase.js";
 
 export default async function migrateProcessingToJobs() {
   console.log("🔎 Fetching processing rows...");
 
   // 1. Fetch rows from processing where ready = true
-  const { data: processingRows, error: processingError } = await supabase
-    .from("processing")
-    .select("*")
-    .eq("ready", true);
+  const processingRows = await fetchProcessing()
 
-  if (processingError) {
-    console.error(
-      "❌ Error fetching processing rows:",
-      processingError.message
-    );
-    return;
-  }
 
   if (!processingRows || processingRows.length === 0) {
     console.log("⚠️ No rows to migrate.");
@@ -31,8 +22,8 @@ export default async function migrateProcessingToJobs() {
       // 2. Check if job already exists in jobs table (by url)
       const { data: existingJob, error: checkError } = await supabase
         .from("jobs")
-        .select("id, url")
-        .eq("url", row.application_url)
+        .select("id")
+        .eq("processing_id", row.id)
         .maybeSingle();
 
       console.log(existingJob);

@@ -11,7 +11,6 @@ import extractRoles from "../components/extractRoles.js";
  */
 export async function scrapeJobDetail(job) {
   console.log(job)
-  // 1. Ignore "Register Your Interest" jobs
 
   const res = await fetch(job.url, {
     headers: {

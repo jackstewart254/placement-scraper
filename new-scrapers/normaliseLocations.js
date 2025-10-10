@@ -38,6 +38,8 @@ export default async function normaliseLocations() {
     .select("id, location, description")
     .eq("ready", false);
 
+
+
   if (error) {
     console.error("Error fetching processing records:", error.message);
     return;
