@@ -12,12 +12,8 @@ const run = async () => {
 
   // index.js
 
-  // try {
-  //   await runSkillExtractionPipeline();
-  // } catch (err) {
-  //   console.error("❌ Pipeline failed:", err);
-  // }
-  // normalizeAllSkills();
+  // await runSkillExtractionPipeline();
+  normalizeAllSkills();
 
   
 };

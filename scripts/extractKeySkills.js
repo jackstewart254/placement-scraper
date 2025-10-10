@@ -1,6 +1,7 @@
 import "dotenv/config";
 import OpenAI from "openai";
 import supabase from "../utils/supabase.js";
+import fetchDescriptions from "../hooks/fetchDescriptions.js";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -139,12 +140,8 @@ export async function runSkillExtractionPipeline() {
   const processedIds = new Set(processedRows.map((r) => r.processing_id));
 
   // 2️⃣ Fetch unprocessed descriptions
-  const { data: descriptions, error: descError } = await supabase
-    .from("descriptions")
-    .select("processing_id, description")
-    .not("description", "is", null);
+  const descriptions = await fetchDescriptions()
 
-  if (descError) throw descError;
   const unprocessed = descriptions.filter(
     (d) => !processedIds.has(d.processing_id)
   );
