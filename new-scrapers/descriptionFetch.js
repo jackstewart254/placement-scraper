@@ -44,7 +44,10 @@ export async function scrapeJobDetail(job) {
   }
 
   // 2. Clean description (strip out job title if it’s at the top)
-  let cleanDescription = cheerio.load(jobData.description || "").text().trim();
+  let cleanDescription = cheerio
+    .load(jobData.description || "")
+    .text()
+    .trim();
 
   if (cleanDescription.startsWith(job.title)) {
     cleanDescription = cleanDescription.replace(job.title, "").trim();
@@ -75,7 +78,7 @@ export async function scrapeJobDetail(job) {
   const rolesStr = roles.join(", ");
 
   // Extract company name from the <a> tag
-  const companyName = $('a.hover\\:underline').first().text().trim();
+  const companyName = $("a.hover\\:underline").first().text().trim();
 
   let companyId = null;
   if (companyName) {
@@ -132,8 +135,6 @@ export async function scrapeJobDetail(job) {
   }
 }
 
-
-
 export async function scrapeJobDetails(jobs) {
   if (!jobs.length) {
     console.log("⚠️ No jobs to scrape.");
@@ -164,17 +165,16 @@ export async function scrapeJobDetails(jobs) {
       const remainingMs = avg * remaining;
       const minutes = Math.floor(remainingMs / 60000);
       const seconds = Math.floor((remainingMs % 60000) / 1000);
-      
-      console.log("---")
+
+      console.log("---");
 
       console.log(
         `⏱️ Job took ${(duration / 1000).toFixed(2)}s. ` +
-        `Avg: ${(avg / 1000).toFixed(2)}s/job. ` +
-        `~${minutes}m ${seconds}s remaining for ${remaining} jobs.`
+          `Avg: ${(avg / 1000).toFixed(2)}s/job. ` +
+          `~${minutes}m ${seconds}s remaining for ${remaining} jobs.`
       );
 
-      console.log("---")
-
+      console.log("---");
 
       await new Promise((r) => setTimeout(r, 1000)); // small delay
     } catch (err) {
@@ -184,4 +184,3 @@ export async function scrapeJobDetails(jobs) {
 
   console.log("✅ All jobs processed.");
 }
-

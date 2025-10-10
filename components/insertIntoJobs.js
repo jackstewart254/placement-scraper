@@ -64,6 +64,7 @@ export default async function migrateProcessingToJobs() {
           category: row.roles,
           ready: true,
           logo: row.logo,
+          processing_id: row.id,
         },
       ]);
 
