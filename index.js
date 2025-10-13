@@ -5,15 +5,19 @@ import { runSkillExtractionPipeline } from "./scripts/extractKeySkills.js";
 import { auditTokenUsage } from "./tokenCalculator.js";
 import { normalizeAllSkills } from "./scripts/unifySkills.js";
 import fetchProcessing from "./hooks/fetchProcessing.js";
+import { normalizeUserSkills } from "./scripts/generatingSkillsForExistingUsers.js";
+import runExtract from "./scripts/unifySkillNames.js";
 
 const run = async () => {
   // await runScraper();
-  await callDescriptions()
+  // await callDescriptions()
 
   // index.js
 
   // await runSkillExtractionPipeline();
-  normalizeAllSkills();
+  // normalizeAllSkills();
+  runExtract()
+  // normalizeUserSkills()
 
   
 };

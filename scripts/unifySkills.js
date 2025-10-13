@@ -25,14 +25,9 @@ let totalCost = 0;
 ----------------------------- */
 function canonicalizeSkillName(skill) {
   if (!skill || typeof skill !== "string") return "";
-  return skill
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+  return skill.trim().toLowerCase().replace(/\s+/g, "");
 }
+
 
 /* -----------------------------
    FETCH EXISTING SKILLS FROM DB
@@ -46,17 +41,19 @@ async function fetchExistingSkills() {
 /* -----------------------------
    FIND SIMILAR SKILLS LOCALLY
 ----------------------------- */
-function findSimilarSkills(skill, dbSkills, maxResults = 10, threshold = 0.4) {
+function findSimilarSkills(skill, dbSkills, maxResults = 10, threshold = 0.5) {
   if (typeof skill !== "string") return [];
   const cleanSkill = canonicalizeSkillName(skill);
   if (!Array.isArray(dbSkills) || dbSkills.length === 0) return [];
 
   const matches = stringSimilarity.findBestMatch(cleanSkill, dbSkills);
-  return matches.ratings
+  const similar = matches.ratings
     .filter((m) => m.rating > threshold)
     .sort((a, b) => b.rating - a.rating)
     .slice(0, maxResults)
     .map((m) => m.target);
+
+  return similar
 }
 
 /* -----------------------------
@@ -100,7 +97,13 @@ ${JSON.stringify(tasks, null, 2)}
     max_tokens: 4000,
   });
 
-  const output = completion.choices[0].message.content.trim();
+  const output = (completion.choices[0].message.content.trim())
+  .replace(/```json/g, "")
+  .replace(/```/g, "")
+  .trim();;
+
+
+
   const usage = completion.usage || { prompt_tokens: 0, completion_tokens: 0 };
 
   // Track tokens & cost
@@ -124,12 +127,29 @@ ${JSON.stringify(tasks, null, 2)}
   }
 
   // Canonicalize outputs
-  const canonicalizedMappings = {};
-  for (const [raw, normalized] of Object.entries(parsed.mappings || {})) {
-    const cleanRaw = canonicalizeSkillName(raw);
-    const cleanNorm = canonicalizeSkillName(normalized);
-    if (cleanRaw && cleanNorm) canonicalizedMappings[cleanRaw] = cleanNorm;
-  }
+const canonicalizedMappings = {};
+for (const [raw, normalized] of Object.entries(parsed.mappings || {})) {
+  const cleanRaw = canonicalizeSkillName(raw);
+  const cleanNorm = canonicalizeSkillName(normalized);
+  if (cleanRaw && cleanNorm) canonicalizedMappings[cleanRaw] = cleanNorm;
+}
+
+  // If you want to inspect them all
+  Object.entries(canonicalizedMappings).forEach(([key, value], i) => {
+    console.log("Index:", i);
+    console.log(tasks[i])
+    console.log("Raw Skill:", key);
+    console.log("Normalized Skill:", value);
+
+    // Find the task that matches this skill
+    const task = tasks.find(t => canonicalizeSkillName(t.skill) === key);
+    if (task) {
+      console.log("Possible matches:", task.possible_matches);
+    }
+
+    console.log("–––––––––––––––––––––––––––––––––––––––");
+  });
+
 
   return canonicalizedMappings;
 }
@@ -173,7 +193,7 @@ async function consolidateSimilarSkills() {
 
   // 3️⃣ Fetch any new skills added by this normalization run
   const { data: newSkills, error: newError } = await supabase
-    .from("skills_temp_new") // or wherever your new ones were stored before this consolidation step
+    .from("skills") // or wherever your new ones were stored before this consolidation step
     .select("skill_name, total_references")
     .maybeSingle();
 
@@ -199,7 +219,7 @@ async function consolidateSimilarSkills() {
 
   // 4️⃣ Replace old table with merged data
   await supabase.from("skills").delete().neq("skill_name", "");
-  const { error: insertError } = await supabase.from("skills").insert(finalArray);
+  // const { error: insertError } = await supabase.from("skills").insert(finalArray);
   if (insertError) console.error("❌ Insert error:", insertError);
   else console.log("✅ Merged and replaced successfully without losing totals.");
 }
@@ -213,7 +233,8 @@ export async function normalizeAllSkills() {
 
   // 1️⃣ Fetch both extracted and consolidated skill sets
   const extracted = await fetchSkillsExtracted();
-  const consolidated = await fetchConsolidatedSkills();
+  // const consolidated = await fetchConsolidatedSkills();
+  const consolidated = []
 
   console.log(`📦 skills_extracted count: ${extracted.length}`);
   console.log(`📦 consolidated_skills count: ${consolidated.length}`);
@@ -300,19 +321,15 @@ export async function normalizeAllSkills() {
     // 💾 Insert into Supabase
     console.log(`💾 Inserting batch ${batchIndex} into Supabase...`);
 
-    console.log(consolidatedBatch)
+    // const { error: insertError1 } = await supabase
+    //   .from("consolidated_skills")
+    //   .upsert(consolidatedBatch, { onConflict: "processing_id" });
+    // if (insertError1) console.error("❌ consolidated_skills insert failed:", insertError1);
 
-    console.log(unifiedSkills)
-
-    const { error: insertError1 } = await supabase
-      .from("consolidated_skills")
-      .upsert(consolidatedBatch, { onConflict: "processing_id" });
-    if (insertError1) console.error("❌ consolidated_skills insert failed:", insertError1);
-
-    const { error: insertError2 } = await supabase
-      .from("skills")
-      .upsert(unifiedSkills, { onConflict: "skill_name" });
-    if (insertError2) console.error("❌ skills insert failed:", insertError2);
+    // const { error: insertError2 } = await supabase
+    //   .from("skills")
+    //   .upsert(unifiedSkills, { onConflict: "skill_name" });
+    // if (insertError2) console.error("❌ skills insert failed:", insertError2);
 
     // 🧾 Log usage
     const batchCost =
