@@ -7,6 +7,10 @@ import { normalizeAllSkills } from "./scripts/unifySkills.js";
 import fetchProcessing from "./hooks/fetchProcessing.js";
 import { normalizeUserSkills } from "./scripts/generatingSkillsForExistingUsers.js";
 import runExtract from "./scripts/unifySkillNames.js";
+import runExtractSkills from "./scripts/extractSkills.js";
+import runSkillNormalisation from "./scripts/runSkillNormalisation.js";
+import main from "./ann/vectorMatching.js"
+import fetchProcessingIds from "./ANNTest.js";
 
 const run = async () => {
   // await runScraper();
@@ -16,7 +20,11 @@ const run = async () => {
 
   // await runSkillExtractionPipeline();
   // normalizeAllSkills();
-  runExtract()
+  // runExtract()
+  // runExtractSkills()
+  // runSkillNormalisation()
+  // main()
+  fetchProcessingIds()
   // normalizeUserSkills()
 
   

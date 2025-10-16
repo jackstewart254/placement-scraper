@@ -1,6 +1,6 @@
 import supabase from "../utils/supabase.js";
 
-const fetchDescriptions = async () => {
+const fetchSkillVectors = async () => {
   let allRecords = [];
   let from = 0;
   const pageSize = 1000;
@@ -8,9 +8,8 @@ const fetchDescriptions = async () => {
 
   while (hasMore) {
     const { data, error } = await supabase
-      .from("descriptions")
-      .select("*")
-      .eq("extracted", false) //This line can not be here once thing's have been normalised again. 
+      .from("skills_vectors")
+      .select("extracted_id")
       .range(from, from + pageSize - 1);
 
     if (error) throw error;
@@ -28,4 +27,4 @@ const fetchDescriptions = async () => {
   return allRecords
 }
 
-export default fetchDescriptions
+export default fetchSkillVectors
